@@ -32,6 +32,37 @@ if (corsOriginEnv) {
   console.log('CORS configured to allow all origins (CORS_ORIGIN not set)')
 }
 
+// Manual CORS headers middleware - Force correct CORS headers
+app.use((req, res, next) => {
+  const origin = req.headers.origin
+  
+  // If specific origins are configured, use them
+  if (allowedOrigins !== true && Array.isArray(allowedOrigins) && allowedOrigins.length > 0) {
+    // If request origin matches allowed origins, use it
+    if (origin && allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin)
+    } else {
+      // For OPTIONS/preflight, allow the first configured origin
+      res.header('Access-Control-Allow-Origin', allowedOrigins[0])
+    }
+  } else {
+    // Allow all origins if not configured
+    res.header('Access-Control-Allow-Origin', origin || '*')
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+  res.header('Access-Control-Allow-Credentials', 'true')
+  res.header('Access-Control-Max-Age', '86400') // 24 hours
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end()
+  }
+  
+  next()
+})
+
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, Postman, etc.)
