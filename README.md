@@ -89,4 +89,3 @@ backend/
 ├── server.js     # Main server file
 └── package.json  # Dependencies and scripts
 ```
-
