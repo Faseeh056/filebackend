@@ -59,6 +59,15 @@ app.get('/', (req, res) => {
   })
 })
 
+// Keep-alive endpoint - ping this regularly to prevent Railway sleep
+app.get('/api/keepalive', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Server is alive',
+    timestamp: new Date().toISOString()
+  })
+})
+
 // Initialize database on startup
 async function startServer() {
   try {
