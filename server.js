@@ -21,12 +21,41 @@ const PORT = process.env.PORT || 5000
 // Middleware
 // CORS configuration - allow all origins for better compatibility
 // For better security, set CORS_ORIGIN env var with specific origins
+const corsOriginEnv = process.env.CORS_ORIGIN
+let allowedOrigins = true // Default: allow all origins
+
+if (corsOriginEnv) {
+  // Parse comma-separated origins and trim whitespace
+  allowedOrigins = corsOriginEnv.split(',').map(o => o.trim()).filter(o => o.length > 0)
+  console.log('CORS configured with origins:', allowedOrigins)
+} else {
+  console.log('CORS configured to allow all origins (CORS_ORIGIN not set)')
+}
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN 
-    ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-    : true, // Allow all origins if not specified
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    if (!origin) {
+      return callback(null, true)
+    }
+    
+    if (allowedOrigins === true) {
+      // Allow all origins if CORS_ORIGIN is not set
+      return callback(null, true)
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true)
+    } else {
+      console.warn(`CORS blocked origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`)
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }
 app.use(cors(corsOptions))
 app.use(express.json())
@@ -65,6 +94,16 @@ app.get('/api/keepalive', (req, res) => {
     status: 'ok', 
     message: 'Server is alive',
     timestamp: new Date().toISOString()
+  })
+})
+
+// Debug endpoint to check CORS configuration
+app.get('/api/debug/cors', (req, res) => {
+  res.json({
+    corsOrigin: process.env.CORS_ORIGIN || 'Not set (allowing all origins)',
+    allowedOrigins: allowedOrigins === true ? 'All origins' : allowedOrigins,
+    requestOrigin: req.headers.origin || 'No origin header',
+    environment: process.env.NODE_ENV || 'development'
   })
 })
 
