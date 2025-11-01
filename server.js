@@ -27,12 +27,15 @@ let allowedOrigins = true // Default: allow all origins
 if (corsOriginEnv) {
   // Parse comma-separated origins and trim whitespace
   allowedOrigins = corsOriginEnv.split(',').map(o => o.trim()).filter(o => o.length > 0)
-  console.log('CORS configured with origins:', allowedOrigins)
+  console.log('✅ CORS configured with origins:', allowedOrigins)
+  console.log('📝 CORS_ORIGIN environment variable:', corsOriginEnv)
 } else {
-  console.log('CORS configured to allow all origins (CORS_ORIGIN not set)')
+  console.log('⚠️ CORS configured to allow all origins (CORS_ORIGIN not set)')
+  console.log('💡 Set CORS_ORIGIN environment variable in Railway to restrict origins')
 }
 
-// Manual CORS headers middleware - Force correct CORS headers
+// Manual CORS headers middleware - Force correct CORS headers FIRST
+// This runs before cors() middleware to ensure headers are set correctly
 app.use((req, res, next) => {
   const origin = req.headers.origin
   
@@ -40,23 +43,29 @@ app.use((req, res, next) => {
   if (allowedOrigins !== true && Array.isArray(allowedOrigins) && allowedOrigins.length > 0) {
     // If request origin matches allowed origins, use it
     if (origin && allowedOrigins.includes(origin)) {
-      res.header('Access-Control-Allow-Origin', origin)
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      console.log(`✅ CORS: Allowing origin: ${origin}`)
+    } else if (origin) {
+      // Origin provided but not in allowed list - still set first allowed origin for preflight
+      res.setHeader('Access-Control-Allow-Origin', allowedOrigins[0])
+      console.warn(`⚠️ CORS: Request origin ${origin} not in allowed list. Using: ${allowedOrigins[0]}`)
     } else {
-      // For OPTIONS/preflight, allow the first configured origin
-      res.header('Access-Control-Allow-Origin', allowedOrigins[0])
+      // No origin header (preflight) - use first allowed origin
+      res.setHeader('Access-Control-Allow-Origin', allowedOrigins[0])
     }
   } else {
     // Allow all origins if not configured
-    res.header('Access-Control-Allow-Origin', origin || '*')
+    res.setHeader('Access-Control-Allow-Origin', origin || '*')
   }
   
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
-  res.header('Access-Control-Allow-Credentials', 'true')
-  res.header('Access-Control-Max-Age', '86400') // 24 hours
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  res.setHeader('Access-Control-Max-Age', '86400') // 24 hours
   
-  // Handle preflight requests
+  // Handle preflight requests immediately
   if (req.method === 'OPTIONS') {
+    console.log(`✅ CORS: Handled OPTIONS preflight for origin: ${origin || 'none'}`)
     return res.status(200).end()
   }
   
