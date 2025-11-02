@@ -147,6 +147,83 @@ app.get('/api/debug/cors', (req, res) => {
   })
 })
 
+// Auto keep-alive service - uploads small file every 10 minutes to prevent Railway sleep
+async function setupKeepAlive() {
+  // Only run in production and if enabled
+  if (process.env.NODE_ENV === 'production' && process.env.DISABLE_KEEPALIVE !== 'true') {
+    const KEEPALIVE_INTERVAL = 10 * 60 * 1000 // 10 minutes in milliseconds
+    
+    const performKeepAlive = async () => {
+      try {
+        const fs = await import('fs')
+        const path = await import('path')
+        const FormData = (await import('form-data')).default
+        
+        // Create a small keep-alive file (~0.5KB)
+        // Fill with content to make it approximately 512 bytes
+        const keepAliveContent = 'Keep-alive file to prevent Railway service sleep. ' + 
+                                 'Generated at: ' + new Date().toISOString() + '. ' +
+                                 'This file is automatically uploaded every 10 minutes to keep the service active. ' +
+                                 'File size: ~512 bytes. '.repeat(3)
+        
+        const keepAliveDir = path.join(__dirname, 'uploads')
+        // Ensure uploads directory exists
+        if (!fs.existsSync(keepAliveDir)) {
+          fs.mkdirSync(keepAliveDir, { recursive: true })
+        }
+        
+        const keepAlivePath = path.join(keepAliveDir, `keep-alive-${Date.now()}.txt`)
+        fs.writeFileSync(keepAlivePath, keepAliveContent)
+        
+        // Prepare form data for upload
+        const formData = new FormData()
+        formData.append('file', fs.createReadStream(keepAlivePath), {
+          filename: `keep-alive-${Date.now()}.txt`,
+          contentType: 'text/plain'
+        })
+        
+        // Make internal request to upload endpoint
+        const response = await fetch(`http://localhost:${PORT}/api/upload`, {
+          method: 'POST',
+          body: formData,
+          headers: formData.getHeaders()
+        })
+        
+        const result = await response.json()
+        
+        // Clean up the temporary file
+        if (fs.existsSync(keepAlivePath)) {
+          try {
+            fs.unlinkSync(keepAlivePath)
+          } catch (unlinkError) {
+            // Ignore cleanup errors
+          }
+        }
+        
+        if (result.success) {
+          console.log(`✅ Keep-alive upload successful at ${new Date().toISOString()} (File ID: ${result.upload?.id})`)
+        } else {
+          console.warn(`⚠️ Keep-alive upload returned error: ${result.message || 'Unknown error'}`)
+        }
+      } catch (error) {
+        // Don't throw - keep-alive failures shouldn't crash the server
+        console.warn(`⚠️ Keep-alive upload failed (non-critical): ${error.message}`)
+      }
+    }
+    
+    // Start keep-alive immediately after server starts (wait 30 seconds for server to be ready)
+    setTimeout(() => {
+      console.log('🔄 Keep-alive service starting - will upload small file every 10 minutes')
+      performKeepAlive()
+    }, 30000) // Wait 30 seconds after server starts
+    
+    // Then run every 10 minutes
+    setInterval(performKeepAlive, KEEPALIVE_INTERVAL)
+  } else {
+    console.log('ℹ️ Keep-alive service disabled (NODE_ENV is not production or DISABLE_KEEPALIVE is set)')
+  }
+}
+
 // Initialize database on startup
 async function startServer() {
   try {
@@ -175,12 +252,18 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`)
       console.log(`Run 'npm run db:studio' to open Drizzle Studio`)
+      
+      // Start keep-alive service
+      setupKeepAlive()
     })
   } catch (error) {
     console.error('Failed to initialize database:', error)
     // Try to start server anyway
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT} (database may not be fully initialized)`)
+      
+      // Start keep-alive service
+      setupKeepAlive()
     })
   }
 }
