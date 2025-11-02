@@ -13,8 +13,6 @@ dist-ssr
 *.local
 
 # Environment variables
-.env
-.env.local
 .env.production.local
 .env.development.local
 
@@ -23,7 +21,6 @@ uploads/
 reports/
 
 # Editor directories and files
-.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -32,3 +29,4 @@ reports/
 *.njsproj
 *.sln
 *.sw?
+config.bat
